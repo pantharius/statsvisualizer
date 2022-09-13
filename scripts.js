@@ -1,3 +1,4 @@
+const colorschemes = ["#ff6961","#ffb480","#f8f38d","#42d6a4","#08cad1","#59adf6","#9d94ff","#c780e8"]
 const screen = [window.innerWidth,window.innerHeight];
 const datas={
     "Python": 45.36,
@@ -14,67 +15,65 @@ const datas={
     "Powershell": 25,
     "Unreal Engine":64,
     "CI/CD": 50,
-    "Kafka":2.9
-}
-sortDatas=(d)=>Object.entries(d).sort((a,b)=>b[1]-a[1])
-console.log(datas)
-
-sorteddatas=sortDatas(datas)
-m2total=screen[0]*screen[1]
-totalpower=sorteddatas.map(c=>c[1]).reduce((a,b)=>a+b)
-sorteddatas = sorteddatas.map(c=>[c[0],Math.sqrt((c[1]/totalpower)*m2total)])
-
-console.log(sorteddatas,m2total)
-
-h=(x,max,i=0,res=[])=>{
-    max=x[0]+max<dimensionMax?max:dimensionMax-x[0]
-    res.push([x[0]+i,x[1]+i])
-    // console.error("~~",res,res.map(c=>grid[c[0]][c[1]]))
-    unvalidcoords=Object.values(grid).flat()
-    u=res.every(c=>unvalidcoords.filter(x=>x[0]==c[0]&&x[1]==c[1]).length==0)
-    return u&&(i+1)<max?h(x,max,i+1,res):[i+(u?1:0),res];
+    "Kafka":8
 }
 
-const dimensionMax=screen[0]>screen[1]?screen[1]:screen[0]
-console.log(screen,dimensionMax);
+// set the dimensions and margins of the graph
+var margin = {top: 2, right: 2, bottom: 2, left: 2},
+  width = screen[0] - margin.left - margin.right,
+  height = screen[1] - margin.top - margin.bottom;
 
-grid={}
-toFill=[...sorteddatas]
-toRetest=[]
-hasToRetest=true;
-mini=0
-alreadydone=false;
-while((toFill.length>0||hasToRetest)&&!alreadydone){
-    if(toRetest.length>0 && hasToRetest){
-        hasToRetest=false
-        toFill.unshift(...toRetest);
-        toRetest=[]
-    }
-    let e=toFill.shift();
-    
-    // Get coord of the first empty place to fill
-    unvalidcoords=Object.values(grid).flat()
-    unvalidcoords=listDim.map(c=>[c,unvalidcoords.filter(x=>x[0]==c).length>0?Math.max(...unvalidcoords.filter(x=>x[0]==c).map(x=>x[1])):0]);
-    coord=unvalidcoords.filter(c=>c[0]>=mini&&c[1]<dimensionMax)[0]
-    coord=coord?[coord[0],coord[1]]:[0,0]
-    console.log(coord)
-    // Get square available space
-    availablespace=h(coord,e[0]);
-    //console.error(coord,availablespace,e)
+// append the svg object to the body of the page
+var svg = d3.select("#my_dataviz")
+.append("svg")
+  .attr("width", width + margin.left + margin.right)
+  .attr("height", height + margin.top + margin.bottom)
+.append("g")
+  .attr("transform",
+        "translate(" + margin.left + "," + margin.top + ")");
 
-    if(e[0]<=availablespace[0]){
-        hasToRetest=toRetest.length>0
-        // console.error("#",availablespace[1])
-        grid[e[1]]=availablespace[1]
-        //console.error(grid.map(c=>c.join` `).join`\n`+"\n");
-    }
-    else toRetest.push(e);
-    
-    if(toFill.length==0 && toRetest.length>0){
-        mini++
-        hasToRetest=true;
-        alreadydone=true;
-    }
-}
+// Read data
+d3.csv('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/data_hierarchy_1level.csv', function() {
+  data=Object.entries(datas).map(c=>({name:c[0],parent:"Origin",value:c[1]}))
+  data.unshift({name:"Origin",value:1})
+  // stratify the data: reformatting for d3.js
+  var root = d3.stratify()
+    .id(function(d) { return d.name; })   // Name of the entity (column name is name in csv)
+    .parentId(function(d) { return d.parent; })   // Name of the parent (column name is parent in csv)
+    (data);
+  root.sum(function(d) { return +d.value })   // Compute the numeric value for each entity
 
-console.log(grid.map(c=>c.join` `).join`\n`);
+  // Then d3.treemap computes the position of each element of the hierarchy
+  // The coordinates are added to the root object above
+  d3.treemap()
+    .size([width, height])
+    .padding(4)
+    (root)
+
+console.log(root.leaves())
+  // use this information to add rectangles:
+  svg
+    .selectAll("rect")
+    .data(root.leaves())
+    .enter()
+    .append("rect")
+      .attr('x', function (d) { return d.x0; })
+      .attr('y', function (d) { return d.y0; })
+      .attr('width', function (d) { return d.x1 - d.x0; })
+      .attr('height', function (d) { return d.y1 - d.y0; })
+      .style("stroke", "black")
+      .style("fill", function (d) { return colorschemes[d.parent.children.indexOf(d)%colorschemes.length] });
+
+  // and to add the text labels
+  svg
+    .selectAll("text")
+    .data(root.leaves())
+    .enter()
+    .append("text")
+      .attr("text-anchor", "middle")
+      .attr("x", function(d){ return (d.x0+d.x1)/2})    // +10 to adjust position (more right)
+      .attr("y", function(d){ return (d.y0+d.y1)/2})    // +20 to adjust position (lower)
+      .text(function(d){ return d.data.name})
+      .attr("font-size", "15px")
+      .attr("fill", "white")
+})
